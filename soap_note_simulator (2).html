@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenChart EMR - SOAP Note Simulator</title>
+    <style>
+        :root {
+            --primary-blue: #0056b3;
+            --header-bg: #e1e4e8;
+            --sidebar-bg: #f8f9fa;
+            --border-color: #d1d5db;
+            --text-dark: #333;
+            --error-red: #d32f2f;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            color: var(--text-dark);
+        }
+
+        .timer-container {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: white;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            z-index: 1000;
+            text-align: center;
+            min-width: 140px;
+        }
+
+        .timer-display {
+            font-size: 2rem;
+            font-weight: bold;
+            font-family: 'Courier New', monospace;
+            margin: 10px 0;
+            transition: color 0.3s ease;
+        }
+
+        .timer-display.green { color: #28a745; }
+        .timer-display.yellow { color: #ffc107; }
+        .timer-display.red { color: #dc3545; }
+
+        .timer-label {
+            font-size: 0.75rem;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 5px;
+        }
+
+        .timer-button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: bold;
+            background-color: var(--primary-blue);
+            color: white;
+            width: 100%;
+            margin-top: 10px;
+            transition: background-color 0.2s;
+        }
+
+        .timer-button:hover {
+            background-color: #004494;
+        }
+
+        .timer-controls {
+            display: flex;
+            gap: 5px;
+            margin-top: 10px;
+        }
+
+        .timer-controls button {
+            flex: 1;
+            padding: 6px 10px;
+            font-size: 0.85rem;
+        }
+
+        header {
+            background-color: var(--header-bg);
+            border-bottom: 2px solid var(--primary-blue);
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header-input {
+            background: transparent;
+            border: 1px dashed #999;
+            padding: 5px;
+            font-family: inherit;
+            color: var(--primary-blue);
+            font-weight: bold;
+        }
+        
+        .header-input:focus {
+            background: white;
+            border: 1px solid var(--primary-blue);
+            outline: none;
+        }
+
+        .patient-name-input { font-size: 1.2rem; width: 300px; text-transform: uppercase; }
+        .patient-dob-input { font-size: 0.9rem; width: 120px; margin-right: 5px; }
+        
+        .gender-select {
+            font-size: 0.9rem;
+            color: var(--primary-blue);
+            font-weight: bold;
+            background: transparent;
+            border: 1px dashed #999;
+            padding: 5px;
+            width: auto;
+            cursor: pointer;
+        }
+
+        .alert-banner { 
+            color: #d32f2f; 
+            font-weight: bold; 
+            background-color: #ffe6e6;
+            padding: 5px 10px;
+            border: 1px solid #d32f2f;
+            border-radius: 4px;
+        }
+
+        .main-container { display: flex; flex: 1; overflow: hidden; }
+
+        .sidebar {
+            width: 180px;
+            background-color: var(--sidebar-bg);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+        }
+        .menu-item { padding: 12px 15px; border-bottom: 1px solid #eee; font-size: 0.95rem; color: #555; }
+        .menu-item.active { background-color: var(--primary-blue); color: white; font-weight: bold; }
+
+        .workspace { flex: 1; padding: 20px; overflow-y: auto; background-color: white; }
+
+        .note-header {
+            display: flex; justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 10px; margin-bottom: 15px;
+        }
+
+        .tabs { display: flex; margin-bottom: 15px; border-bottom: 1px solid var(--border-color); }
+        .tab {
+            padding: 10px 20px; cursor: pointer; background-color: #f1f1f1;
+            margin-right: 5px; border-top-left-radius: 5px; border-top-right-radius: 5px; border: 1px solid transparent;
+        }
+        .tab.active { background-color: white; border-color: var(--border-color); border-bottom: 1px solid white; font-weight: bold; color: var(--primary-blue); }
+
+        .form-section { display: none; margin-bottom: 20px; }
+        .form-section.active { display: block; }
+
+        h3 { border-bottom: 1px solid #eee; padding-bottom: 5px; color: var(--primary-blue); margin-top: 0; }
+
+        label { display: block; margin-top: 15px; font-weight: 600; font-size: 0.9rem; margin-bottom: 5px; }
+        
+        textarea {
+            width: 98%; height: 80px; padding: 10px;
+            border: 1px solid var(--border-color); border-radius: 4px;
+            font-family: inherit; resize: vertical;
+        }
+        
+        select, input[type="number"], input[type="time"] { 
+            padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; width: 100%; max-width: 300px; 
+        }
+
+        input[type="date"] {
+            padding: 5px; border: 1px solid var(--border-color); border-radius: 4px;
+        }
+        
+        .grid-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 10px; }
+
+        .ref-table {
+            width: 100%; max-width: 400px; border-collapse: collapse; font-size: 0.85rem; margin-top: 10px; background-color: #fcfcfc;
+        }
+        .ref-table th, .ref-table td { border: 1px solid #ccc; padding: 5px 10px; text-align: left; }
+        .ref-table th { background-color: #eee; }
+
+        .actions { margin-top: 30px; padding-top: 20px; border-top: 2px solid #eee; text-align: right; }
+        .btn { padding: 12px 24px; border: none; border-radius: 4px; cursor: pointer; font-size: 1rem; font-weight: bold; }
+        .btn-sign { background-color: #28a745; color: white; }
+        .btn-sign:hover { background-color: #218838; }
+
+        .calc-display {
+            font-weight: bold;
+            color: var(--primary-blue);
+            margin-left: 10px;
+        }
+
+        @media print {
+            .sidebar, .tabs, .actions, .alert-banner, .timer-container { display: none !important; }
+            body, .main-container, .workspace { height: auto; display: block; overflow: visible; padding: 0; margin: 0; }
+            header { border-bottom: 1px solid #000; padding: 10px 0; }
+            
+            .alert-banner { 
+                display: block !important; 
+                border: none; 
+                background: none; 
+                padding: 0; 
+                float: right; 
+                font-size: 0.9rem;
+            }
+
+            .header-input, .gender-select, input[type="date"] { 
+                border: none; padding: 0; color: black; -webkit-appearance: none; appearance: none; background: transparent;
+            }
+            
+            .form-section { display: block !important; page-break-inside: avoid; border-bottom: 1px dotted #ccc; padding-bottom: 20px; }
+            textarea { border: 1px solid #ccc; height: auto; min-height: 60px; resize: none; background-color: #fcfcfc; }
+            select, input { border: none; border-bottom: 1px solid #ccc; background: transparent; -webkit-appearance: none; font-weight: bold; padding: 0; }
+            * { color: black !important; }
+            h3 { margin-top: 20px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="timer-container">
+        <div class="timer-label">Documentation Timer</div>
+        <div id="timer-display" class="timer-display green">5:00</div>
+        <button id="start-btn" class="timer-button" onclick="startTimer()">Start Timer</button>
+        <div id="timer-controls" class="timer-controls" style="display: none;">
+            <button class="timer-button" onclick="pauseTimer()">Pause</button>
+            <button class="timer-button" onclick="resetTimer()">Reset</button>
+        </div>
+    </div>
+
+    <header>
+        <div class="patient-info">
+            <div style="margin-bottom: 5px;">
+                <label style="display:inline; font-size: 0.8rem; margin:0;">PATIENT:</label>
+                <input type="text" class="header-input patient-name-input" placeholder="Last, First" value="DOE, JOHN">
+            </div>
+            <div>
+                <label style="display:inline; font-size: 0.8rem; margin:0;">DOB:</label>
+                <input type="text" class="header-input patient-dob-input" placeholder="MM/DD/YYYY" value="01/15/1950">
+                <select class="gender-select">
+                    <option>- Select -</option>
+                    <option>Male</option>
+                    <option>Female</option>
+                    <option>Non-binary</option>
+                    <option>Transgender Male</option>
+                    <option>Transgender Female</option>
+                    <option>Prefer not to report</option>
+                </select>
+            </div>
+        </div>
+        
+        <div class="alert-banner">⚠ FALL RISK - USE GAIT BELT</div>
+    </header>
+
+    <div class="main-container">
+        <aside class="sidebar">
+            <div class="menu-item active">📋 Progress Note</div>
+            <div class="menu-item">📊 Orders</div>
+            <div class="menu-item">💊 Medications</div>
+            <div class="menu-item">🧪 Labs</div>
+            <div class="menu-item">📈 Flowsheets</div>
+        </aside>
+
+        <main class="workspace">
+            <form>
+                <div class="note-header">
+                    <div>
+                        <strong style="color: var(--primary-blue); font-size: 1.1rem;">SOAP Note</strong>
+                        <div style="font-size: 0.85rem; margin-top: 5px;">
+                            Service Date: <input type="date" id="service-date">
+                        </div>
+                    </div>
+                    <div style="text-align: right; font-size: 0.85rem; color: #666;">
+                        Provider: <strong>Student OTR</strong><br>
+                        Location: Acute Care - 3 West
+                    </div>
+                </div>
+
+                <div class="tabs">
+                    <div class="tab active" onclick="openTab('subjective')">S: Subjective</div>
+                    <div class="tab" onclick="openTab('objective')">O: Objective</div>
+                    <div class="tab" onclick="openTab('assessment')">A: Assessment</div>
+                    <div class="tab" onclick="openTab('plan')">P: Plan</div>
+                </div>
+
+                <div id="subjective" class="form-section active">
+                    <h3>S: Subjective</h3>
+                    <label>Patient Report:</label>
+                    <textarea id="subj-text" placeholder="Document patient's chief complaint, pain level, concerns, goals...">Patient reports feeling tired but motivated to work on getting stronger.</textarea>
+                    
+                    <div class="grid-row">
+                        <div>
+                            <label>Pain Level (0-10)</label>
+                            <input type="number" min="0" max="10" value="3">
+                        </div>
+                        <div>
+                            <label>Mental Status</label>
+                            <select><option>Alert & Oriented x4</option><option>Confused</option><option>Lethargic</option></select>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="objective" class="form-section">
+                    <h3>O: Objective</h3>
+                    <div class="grid-row">
+                        <div>
+                            <label>Grooming</label>
+                            <select>
+                                <option>-</option> <option>Independent</option> <option>Setup</option> <option>Min A</option> <option>Mod A</option> <option>Max A</option> <option>Dep</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label>Feeding</label>
+                            <select>
+                                <option>-</option> <option>Independent</option> <option>Setup</option> <option>Min A</option> <option>Mod A</option> <option>Max A</option> <option>Dep</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="grid-row">
+                        <div>
+                            <label>UB Dressing</label>
+                            <select>
+                                <option>-</option> <option>Independent</option> <option>Setup</option> <option>Min A</option> <option>Mod A</option> <option>Max A</option> <option>Dep</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label>LB Dressing</label>
+                            <select>
+                                <option>-</option> <option>Independent</option> <option>Setup</option> <option>Min A</option> <option>Mod A</option> <option>Max A</option> <option>Dep</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="grid-row">
+                        <div>
+                            <label>Toileting</label>
+                            <select>
+                                <option>-</option> <option>Independent</option> <option>Setup</option> <option>Min A</option> <option>Mod A</option> <option>Max A</option> <option>Dep</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label>Transfers</label>
+                            <select>
+                                <option>-</option> <option>Independent</option> <option>Setup</option> <option>Min A</option> <option>Mod A</option> <option>Max A</option> <option>Dep</option>
+                            </select>
+                        </div>
+                    </div>
+                    <label>Intervention Details:</label>
+                    <textarea id="obj-text" placeholder="Describe specific interventions, education provided, and patient response..."></textarea>
+                </div>
+
+                <div id="assessment" class="form-section">
+                    <h3>A: Assessment</h3>
+                    <label>Clinical Impression:</label>
+                    <textarea id="ass-text" placeholder="Analysis of performance, barriers to discharge, and rehab potential..."></textarea>
+                    
+                    <div class="grid-row">
+                        <div>
+                            <label>Progress</label>
+                            <select><option>Progressing</option><option>Maintained</option><option>Regressed</option></select>
+                        </div>
+                        <div>
+                            <label>Discharge Rec</label>
+                            <select><option>Home Health</option><option>SNF</option><option>IPR</option><option>Outpatient</option></select>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="plan" class="form-section">
+                    <h3>P: Plan & Billing</h3>
+                    
+                    <div class="grid-row" style="background-color: #f0f7ff; padding: 10px; border-radius: 5px; border: 1px solid #cce5ff; align-items: end;">
+                        <div>
+                            <label style="margin-top:0;">Time In:</label>
+                            <input type="time" id="time-in" onchange="calculateMinutes()">
+                        </div>
+                        <div>
+                            <label style="margin-top:0;">Time Out:</label>
+                            <input type="time" id="time-out" onchange="calculateMinutes()">
+                        </div>
+                        <div style="padding-bottom: 8px;">
+                            Total Duration: <span id="total-minutes-display" class="calc-display">0 mins</span>
+                        </div>
+                    </div>
+
+                    <label>Plan of Care:</label>
+                    <textarea>Continue OT 5x/wk.</textarea>
+                    
+                    <h4>CPT Units</h4>
+                    <div class="grid-row">
+                        <div><label>97530 (Ther Act)</label><input type="number" class="cpt-unit" placeholder="Units" min="0"></div>
+                        <div><label>97535 (Self Care)</label><input type="number" class="cpt-unit" placeholder="Units" min="0"></div>
+                    </div>
+                    <div class="grid-row">
+                        <div><label>97110 (Ther Ex)</label><input type="number" class="cpt-unit" placeholder="Units" min="0"></div>
+                        <div><label>97112 (Neuro)</label><input type="number" class="cpt-unit" placeholder="Units" min="0"></div>
+                    </div>
+
+                    <div style="margin-top: 20px;">
+                        <h4 style="margin-bottom: 5px; color: #555;">Reference: 8-Minute Rule</h4>
+                        <table class="ref-table">
+                            <thead>
+                                <tr>
+                                    <th>Units</th>
+                                    <th>Minutes</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td>0 Units</td><td>0 - 7 minutes</td></tr>
+                                <tr><td>1 Unit</td><td>8 - 22 minutes</td></tr>
+                                <tr><td>2 Units</td><td>23 - 37 minutes</td></tr>
+                                <tr><td>3 Units</td><td>38 - 52 minutes</td></tr>
+                                <tr><td>4 Units</td><td>53 - 67 minutes</td></tr>
+                                <tr><td>5 Units</td><td>68 - 82 minutes</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="actions">
+                    <p style="font-size: 0.9rem; color: #666; margin-bottom: 10px;">
+                        Checking Time vs. Units...
+                    </p>
+                    <button type="button" class="btn btn-sign" onclick="validateAndSign()">Sign & Finalize (PDF)</button>
+                </div>
+
+            </form>
+        </main>
+    </div>
+
+    <script>
+        let timerInterval = null;
+        let timeRemaining = 300;
+        let isRunning = false;
+
+        function updateTimerDisplay() {
+            const minutes = Math.floor(timeRemaining / 60);
+            const seconds = timeRemaining % 60;
+            const display = document.getElementById('timer-display');
+            
+            display.textContent = minutes + ':' + (seconds < 10 ? '0' : '') + seconds;
+            
+            display.className = 'timer-display';
+            if (timeRemaining > 120) {
+                display.classList.add('green');
+            } else if (timeRemaining > 60) {
+                display.classList.add('yellow');
+            } else {
+                display.classList.add('red');
+            }
+        }
+
+        function playBuzz() {
+            try {
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                oscillator.frequency.value = 400;
+                oscillator.type = 'square';
+                
+                gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+                
+                oscillator.start(audioContext.currentTime);
+                oscillator.stop(audioContext.currentTime + 0.5);
+            } catch(e) {
+                console.log('Audio not available');
+            }
+        }
+
+        function startTimer() {
+            if (isRunning) return;
+            
+            isRunning = true;
+            document.getElementById('start-btn').style.display = 'none';
+            document.getElementById('timer-controls').style.display = 'flex';
+            
+            timerInterval = setInterval(function() {
+                if (timeRemaining > 0) {
+                    timeRemaining--;
+                    updateTimerDisplay();
+                    
+                    if (timeRemaining === 0) {
+                        clearInterval(timerInterval);
+                        playBuzz();
+                        isRunning = false;
+                    }
+                }
+            }, 1000);
+        }
+
+        function pauseTimer() {
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+                isRunning = false;
+                
+                const controls = document.getElementById('timer-controls');
+                controls.innerHTML = '<button class="timer-button" onclick="resumeTimer()">Resume</button><button class="timer-button" onclick="resetTimer()">Reset</button>';
+            }
+        }
+
+        function resumeTimer() {
+            if (timeRemaining > 0) {
+                startTimer();
+                const controls = document.getElementById('timer-controls');
+                controls.innerHTML = '<button class="timer-button" onclick="pauseTimer()">Pause</button><button class="timer-button" onclick="resetTimer()">Reset</button>';
+            }
+        }
+
+        function resetTimer() {
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+            }
+            
+            timeRemaining = 300;
+            isRunning = false;
+            updateTimerDisplay();
+            
+            document.getElementById('start-btn').style.display = 'block';
+            document.getElementById('timer-controls').style.display = 'none';
+        }
+
+        document.getElementById('service-date').valueAsDate = new Date();
+
+        function openTab(id) {
+            var sections = document.querySelectorAll('.form-section');
+            for (var i = 0; i < sections.length; i++) {
+                sections[i].classList.remove('active');
+            }
+            var tabs = document.querySelectorAll('.tab');
+            for (var i = 0; i < tabs.length; i++) {
+                tabs[i].classList.remove('active');
+            }
+            document.getElementById(id).classList.add('active');
+            event.currentTarget.classList.add('active');
+        }
+
+        var globalMinutes = 0;
+
+        function calculateMinutes() {
+            const timeIn = document.getElementById("time-in").value;
+            const timeOut = document.getElementById("time-out").value;
+            const display = document.getElementById("total-minutes-display");
+
+            if(timeIn && timeOut) {
+                const start = new Date("01/01/2000 " + timeIn);
+                const end = new Date("01/01/2000 " + timeOut);
+                
+                var diffMs = end - start;
+                if (diffMs < 0) {
+                    display.innerText = "Error (Check Times)";
+                    display.style.color = "red";
+                    globalMinutes = 0;
+                } else {
+                    var diffMins = Math.round(diffMs / 60000);
+                    globalMinutes = diffMins;
+                    display.innerText = diffMins + " mins";
+                    display.style.color = "#0056b3";
+                }
+            }
+        }
+
+        function validateAndSign() {
+            calculateMinutes();
+
+            const inputs = document.querySelectorAll('.cpt-unit');
+            var totalUnits = 0;
+            for (var i = 0; i < inputs.length; i++) {
+                if(inputs[i].value) {
+                    totalUnits += parseInt(inputs[i].value);
+                }
+            }
+
+            var expectedUnits = 0;
+            if (globalMinutes >= 8 && globalMinutes <= 22) expectedUnits = 1;
+            else if (globalMinutes >= 23 && globalMinutes <= 37) expectedUnits = 2;
+            else if (globalMinutes >= 38 && globalMinutes <= 52) expectedUnits = 3;
+            else if (globalMinutes >= 53 && globalMinutes <= 67) expectedUnits = 4;
+            else if (globalMinutes >= 68 && globalMinutes <= 82) expectedUnits = 5;
+            else if (globalMinutes >= 83) expectedUnits = 6;
+            
+            if (globalMinutes > 0 && globalMinutes < 8 && totalUnits > 0) {
+                alert("BILLING ERROR:\n\nTotal treatment time is only " + globalMinutes + " minutes.\nThis is not billable under the 8-minute rule (requires at least 8 mins).\n\nPlease adjust your units to 0.");
+                return;
+            }
+
+            if (totalUnits !== expectedUnits) {
+                alert("BILLING ERROR:\n\nTotal Time: " + globalMinutes + " minutes\nUnits Billed: " + totalUnits + "\n\nAccording to the 8-Minute Rule, " + globalMinutes + " minutes requires exactly " + expectedUnits + " unit(s).\n\nPlease correct your CPT units before signing.");
+                return;
+            }
+
+            window.print();
+        }
+    </script>
+</body>
+</html>
